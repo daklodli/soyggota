@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+const c=vm.runInNewContext(fs.readFileSync('content.js','utf8')+';content');
+Object.assign(c.en,{navLabel:'Main navigation',filterLabel:'Tour categories',languageLabel:'Language',heroAlt:'Khor Virap monastery and Mount Ararat',storyAlt:'Noravank monastery beneath the red cliffs',description:'Private tours in Armenia and Georgia with Soyggota. Plan a day trip or a longer journey for your own group.',invalid_name:'Please enter your name (up to 100 characters).',invalid_date:'Please choose today or a future calendar date.',invalid_guests:'Please enter a whole number between 1 and 30.',invalid_wishes:'Please keep your message under 2,000 characters.'});
+Object.assign(c.hy,{navLabel:'Գլխավոր բաժիններ',filterLabel:'Տուրերի տեսակներ',languageLabel:'Լեզու',heroAlt:'Խոր Վիրապի վանքն ու Արարատը',storyAlt:'Նորավանքը՝ կարմիր ժայռերի ներքո',description:'Անհատական տուրեր Հայաստանում և Վրաստանում՝ Soyggota-ի հետ։ Մեկօրյա և բազմօրյա երթուղիներ ձեր խմբի համար։',invalid_name:'Խնդրում ենք գրել անունը՝ մինչև 100 նիշ։',invalid_date:'Ընտրեք այսօրվա կամ ապագա օրացուցային ամսաթիվ։',invalid_guests:'Գրեք ամբողջ թիվ՝ 1-ից 30։',invalid_wishes:'Հաղորդագրությունը պետք է լինի մինչև 2000 նիշ։'});
+Object.assign(c.ru,{navLabel:'Основная навигация',filterLabel:'Категории туров',languageLabel:'Язык',heroAlt:'Монастырь Хор Вирап и гора Арарат',storyAlt:'Монастырь Нораванк под красными скалами',description:'Индивидуальные туры по Армении и Грузии с Soyggota. Поездки на один или несколько дней для вашей компании.',invalid_name:'Введите имя длиной до 100 символов.',invalid_date:'Выберите сегодняшнюю или будущую календарную дату.',invalid_guests:'Введите целое число от 1 до 30.',invalid_wishes:'Сообщение должно содержать не более 2000 символов.'});
+fs.writeFileSync('content.js','const content = '+JSON.stringify(c,null,2)+';\n');
+let html=fs.readFileSync('index.html','utf8');
+html=html.replace(/<([a-z0-9]+)([^>]*data-i="([a-zA-Z0-9_]+)"[^>]*)>[^]*?<\/\1>/g,(all,tag,attrs,key)=>`<${tag}${attrs}>${c.en[key]}</${tag}>`);
+fs.writeFileSync('index.html',html);
