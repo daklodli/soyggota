@@ -1,8 +1,13 @@
 {
-  "name":"soyggota",
-  "private":true,
-  "version":"1.0.0",
-  "description":"Soyggota static multilingual travel website",
-  "scripts":{"test":"node --test tests/*.test.cjs","check":"node --check app.js && node --check core.js && node --check content.js && node --test tests/*.test.cjs"},
-  "engines":{"node":">=20"}
+  "name": "soyggota",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Soyggota static multilingual travel website",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check app.js && node --check selects.js && node --check core.js && node --check content.js && node --test tests/*.test.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
 }

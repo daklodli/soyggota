@@ -21,6 +21,7 @@
       const parsed = new Date(Date.UTC(year,month-1,day));
       if (parsed.getUTCFullYear()!==year || parsed.getUTCMonth()!==month-1 || parsed.getUTCDate()!==day || data.date<localDate(now)) errors.date='date';
     }
+    if (!['garni','wine','south','georgia','custom'].includes(data.tour)) errors.tour='tour';
     if (data.wishes.length>2000) errors.wishes='wishes';
     return {data,errors,valid:Object.keys(errors).length===0};
   }

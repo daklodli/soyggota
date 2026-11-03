@@ -25,6 +25,9 @@ const languages=['en','hy','ru'];
 let lang='en';
 try { const saved=localStorage.getItem('soyggota-lang'); if(languages.includes(saved))lang=saved; } catch {}
 let filter='all';
+let languagePicker,tourPicker;
+const touchedFields=new Set();
+let submitted=false;
 const $=s=>document.querySelector(s);
 const index=()=>languages.indexOf(lang);
 const text=()=>content[lang];
@@ -72,8 +75,8 @@ function renderLanguage() {
   document.querySelectorAll('[data-i]').forEach(el=>el.innerHTML=text()[el.dataset.i]||'');
   $('#language').value=lang;
   $('#tour-dialog .close').setAttribute('aria-label',closeLabel());
-  const selection=$('#tour-select').value||'custom';
-  $('#tour-select').innerHTML=`<option value="custom">${text().customOption}</option>`+tours.map(t=>`<option value="${t.id}">${t.title[index()]}</option>`).join('');
+  const selection=$('#tour-select').value;
+  $('#tour-select').innerHTML=`<option value="" disabled>${text().chooseRoute}</option><option value="custom">${text().customOption}</option>`+tours.map(t=>`<option value="${t.id}">${t.title[index()]}</option>`).join('');
   $('#tour-select').value=selection;
   if(!$('#prepared').hidden)prepareMessage();
   $('#copy-status').textContent='';
@@ -84,6 +87,8 @@ function renderLanguage() {
   $('.story figure img').alt=text().storyAlt;
   document.querySelector('meta[name=description]').content=text().description;
   renderRoutes();
+  languagePicker?.render();tourPicker?.render();
+  renderFieldErrors();
 }
 
 $('#language').addEventListener('change',e=>{
@@ -104,17 +109,18 @@ $('#cards').addEventListener('click',e=>{
   if(!button)return;
   const tour=tours.find(t=>t.id===button.dataset.tour);
   if(!tour)return;
-  $('#tour-detail').innerHTML=`<p class="eyebrow">${privateLabel()} · ${duration(tour)}</p>
+  $('#tour-detail').innerHTML=`<div class="route-cover"><img src="${tour.img}" alt="${tour.alt[index()]}"><span>${text()[tour.cat]} · ${duration(tour)}</span></div><p class="eyebrow">${privateLabel()} · ${duration(tour)}</p>
     <h2 id="detail-title">${tour.title[index()]}</h2><p>${tour.note[index()]}</p>
-    <ol class="itinerary">${tour.stops[index()].map(stop=>`<li>${escapeHTML(stop)}</li>`).join('')}</ol>
+    <ol class="itinerary route-timeline">${tour.stops[index()].map(stop=>`<li>${escapeHTML(stop)}</li>`).join('')}</ol>
     <h3>${text().included}</h3><p>${text().includedText}</p>
     <h3>${text().conditions}</h3><p>${text().conditionsText}</p>
     <button class="button" id="choose-tour">${text().choose}</button>`;
   $('#choose-tour').onclick=()=>{
     $('#tour-select').value=tour.id;
+    $('#tour-select').dispatchEvent(new Event('change',{bubbles:true}));
     invalidatePrepared();
     dialog.close();
-    $('#tour-select').focus({preventScroll:true});
+    (tourPicker?.trigger||$('#tour-select')).focus({preventScroll:true});
     moveTo($('#plan'));
   };
   dialog.showModal();
@@ -127,41 +133,70 @@ dialog.addEventListener('click',e=>{
   const bounds=dialog.getBoundingClientRect();
   if(e.clientX<bounds.left||e.clientX>bounds.right||e.clientY<bounds.top||e.clientY>bounds.bottom)dialog.close();
 });
+const fieldNames=['name','date','guests','tour','wishes'];
+function renderFieldErrors() {
+  const result=core.validate(formValues());
+  for(const name of fieldNames){
+    const field=$(`[name=${name}]`), group=$(`[data-field=${name}]`), error=$(`#${name}-error`);
+    const invalid=Boolean(result.errors[name]&&touchedFields.has(name));
+    const errorText=!result.data[name]?text()[`required_${name}`]||text()[`invalid_${name}`]:text()[`invalid_${name}`];
+    group.classList.toggle('field-invalid',invalid);
+    field.setAttribute('aria-invalid',String(invalid));
+    error.textContent=invalid?errorText:'';error.hidden=!invalid;
+    if(name==='tour'&&tourPicker){tourPicker.trigger.setAttribute('aria-invalid',String(invalid));tourPicker.trigger.setAttribute('aria-describedby','tour-error');}
+  }
+  const summary=$('#inquiry-error-summary');
+  summary.hidden=!(submitted&&!result.valid);summary.textContent=summary.hidden?'':text().errorSummary;
+  return result;
+}
 function updateDateLimit() { $('[name=date]').min=core.localDate(); }
 updateDateLimit();
+$('#inquiry').noValidate=true;
 $('#inquiry').addEventListener('focusin',updateDateLimit);
+$('#inquiry').addEventListener('focusout',e=>{
+  if(fieldNames.includes(e.target.name)){touchedFields.add(e.target.name);renderFieldErrors();}
+});
 for(const event of ['input','change']) $('#inquiry').addEventListener(event,e=>{
-  if(!e.target.matches('input,select,textarea') || e.target.id==='message')return;
-  e.target.setCustomValidity('');
-  invalidatePrepared();
+  if(!fieldNames.includes(e.target.name))return;
+  if(e.type==='change')touchedFields.add(e.target.name);
+  invalidatePrepared();renderFieldErrors();
 });
 $('#inquiry').addEventListener('submit',e=>{
-  e.preventDefault();
-  updateDateLimit();
-  const result=core.validate(formValues());
-  for(const name of ['name','date','guests','wishes']) {
-    const field=$(`[name=${name}]`);
-    field.setCustomValidity(result.errors[name]?text()[`invalid_${name}`]:'');
+  e.preventDefault();updateDateLimit();submitted=true;
+  fieldNames.forEach(name=>touchedFields.add(name));
+  const result=renderFieldErrors();
+  if(!result.valid){
+    invalidatePrepared();
+    const first=fieldNames.find(name=>result.errors[name]);
+    const target=first==='tour'&&tourPicker?tourPicker.trigger:$(`[name=${first}]`);
+    target.focus({preventScroll:true});moveTo(target);return;
   }
-  if(!result.valid || !$('#inquiry').reportValidity())return;
-  prepareMessage();
-  $('#prepared').hidden=false;
-  $('#copy-status').textContent='';
-  $('#message').focus({preventScroll:true});
-  moveTo($('#prepared'));
+  prepareMessage();$('#prepared').hidden=false;$('#copy-status').textContent='';
+  $('#message').focus({preventScroll:true});moveTo($('#prepared'));
 });
-$('#copy').addEventListener('click',async()=>{
+async function copyPreparedMessage() {
   const value=$('#message').value;
   try {
     if(!navigator.clipboard?.writeText)throw new Error('Clipboard unavailable');
-    await navigator.clipboard.writeText(value);
-    if(!$('#prepared').hidden)$('#copy-status').textContent=text().copied;
+    await navigator.clipboard.writeText(value);return true;
   } catch {
-    $('#message').focus({preventScroll:true});
-    $('#message').select();
-    let copied=false;
-    try{copied=document.execCommand('copy');}catch{}
-    $('#copy-status').textContent=copied?text().copied:text().copyFail;
+    $('#message').focus({preventScroll:true});$('#message').select();
+    try{return document.execCommand('copy');}catch{return false;}
   }
+}
+$('#copy').addEventListener('click',async()=>{
+  const copied=await copyPreparedMessage();
+  if(!$('#prepared').hidden)$('#copy-status').textContent=copied?text().copied:text().copyFail;
 });
+$('#instagram-send').addEventListener('click',async()=>{
+  // The native link opens the chat. Start clipboard writing during the click,
+  // before the browser transfers focus to the new tab.
+  const copied=await copyPreparedMessage();
+  $('#copy-status').textContent=copied?text().instagramCopied:text().copyFail;
+});
+languagePicker=SoyggotaSelect.enhance($('#language'),{kind:'language',label:()=>text().languageLabel});
+tourPicker=SoyggotaSelect.enhance($('#tour-select'),{kind:'route',label:()=>text().tourLabel,details:value=>{
+  const tour=tours.find(t=>t.id===value);
+  return tour?`${duration(tour)} · ${text()[tour.cat]}`:text().customHint;
+}});
 renderLanguage();
